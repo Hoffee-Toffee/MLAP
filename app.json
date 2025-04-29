@@ -1,0 +1,9 @@
+{
+  "name": "MLAP",
+  "displayName": "MLAP",
+  "expo": {
+    "permissions": [
+      "MEDIA_LIBRARY"
+    ]
+  }
+}

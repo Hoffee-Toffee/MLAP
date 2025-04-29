@@ -1,0 +1,147 @@
+# General
+.env
+*.log
+*.tmp
+*.swp
+*.temp
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Xcode
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+**/.xcode.env.local
+
+# Android/IntelliJ
+build/
+.idea
+.gradle
+local.properties
+*.iml
+*.hprof
+.cxx/
+*.keystore
+!debug.keystore
+.kotlin/
+
+# React Native
+android/app/build/
+ios/build/
+ios/Pods/
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# fastlane
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+
+# Bundle artifact
+*.jsbundle
+
+# Ruby / CocoaPods
+**/Pods/
+/vendor/bundle/
+
+# Metro
+.metro-health-check*
+
+# Testing
+/coverage
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# VSCode
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/*.code-workspace
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.swp
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+*.ninja
+
+# Debugging
+*.stackdump
+*.core
+
+# Build artifacts
+*.apk
+*.aab
+*.app
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Coverage reports
+coverage/
+*.lcov
+
+# IDE specific
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Miscellaneous
+*.bak
+*.old
+*.orig
+*.rej
+*.swo
+*.swp
+*.tmp
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
