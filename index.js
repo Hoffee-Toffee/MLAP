@@ -2,6 +2,25 @@
  * @format
  */
 
+if (!Array.prototype.at) {
+  Array.prototype.at = function (index) {
+    if (index < 0) {
+      index = this.length + index;
+    }
+    return this[index];
+  };
+}
+
+import {Buffer} from 'buffer';
+
+if (typeof atob === 'undefined') {
+  global.atob = input => Buffer.from(input, 'base64').toString('binary');
+}
+
+if (typeof btoa === 'undefined') {
+  global.btoa = input => Buffer.from(input, 'binary').toString('base64');
+}
+
 import {AppRegistry} from 'react-native';
 import {useColorScheme} from 'react-native';
 import {

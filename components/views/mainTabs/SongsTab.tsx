@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, PermissionsAndroid, Platform } from 'react-native';
-// import TrackPlayer from 'react-native-track-player';
+import { getAudioMetadata } from '@missingcore/audio-metadata';
 import SongList from '../../SongList';
 import RNFS from 'react-native-fs';
-// import { Text } from 'react-native-paper';
 
 const SongsScreen = () => {
   const demoSongs = [
@@ -86,24 +85,30 @@ const SongsScreen = () => {
       const scanDirectory = async (path) => {
         try {
           const files = await RNFS.readDir(path);
-          let audioFiles = [];
-
-          for (const file of files) {
+          const audioFiles = await Promise.all(files.map(async (file, index) => {
             if (file.isFile() && file.name.endsWith('.mp3')) {
-              audioFiles.push({
-                id: audioFiles.length.toString(),
-                url: file.path,
-                filename: file.name.replace('.mp3', ''),
-                artist: 'Unknown Artist',
-                duration: 0,
-              });
-            } else if (file.isDirectory()) {
-              // const subDirFiles = await scanDirectory(file.path);
-              // audioFiles = audioFiles.concat(subDirFiles);
-            }
-          }
+              try {
+                const uri = `file://${file.path}`;
+                const wantedTags = ['album', 'albumArtist', 'artist', 'artwork', 'name', 'track', 'year'] as const;
+                const { metadata } = await getAudioMetadata(uri, wantedTags);
 
-          return audioFiles;
+                return {
+                  id: index.toString(), // Use the index from the map function for unique IDs
+                  filename: metadata.name || file.name.replace('.mp3', ''),
+                  uri: metadata.artwork || '',
+                  artist: metadata.artist || 'Unknown Artist',
+                  duration: 0, // Placeholder, as duration is not provided by metadata
+                };
+              } catch (metadataError) {
+                console.error(`Error fetching metadata for file ${file.path}:`, metadataError);
+                return null;
+              }
+            } else if (file.isDirectory()) {
+              return null;
+            }
+          }));
+
+          return audioFiles.filter(Boolean);
         } catch (error) {
           console.error(`Error reading directory ${path}:`, error);
           return [];
