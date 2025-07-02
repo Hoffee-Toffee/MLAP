@@ -1,7 +1,6 @@
 import { Audio } from 'expo-av';
 import { AVPlaybackStatusSuccess, AVPlaybackStatus } from 'expo-av';
 
-// Song interface remains the same
 export interface Song {
   id: string;
   uri: string;
@@ -15,10 +14,11 @@ interface QueuePlaybackState {
   sound: Audio.Sound | null;
   songs: Song[];
   currentIndex: number;
-  isPlaying: boolean;
-  isActuallyPlayingAudio: boolean; // New: to track if this queue is the one outputting sound
+  isPlaying: boolean; // User's intent for this queue to play
+  // isActuallyPlayingAudio is removed as it's now simply tied to isPlaying and sound object status
   positionMillis: number;
   durationMillis: number;
+  volume: number; // Individual volume for this queue (defaults to 1.0)
 }
 
 type PlaybackStatusListener = (queueId: string, status: AVPlaybackStatusSuccess) => void;
@@ -26,9 +26,7 @@ type TrackFinishedListener = (queueId: string) => void;
 
 class AudioPlaybackService {
   private queueStates: Map<string, QueuePlaybackState> = new Map();
-  private activeAudioOutputQueueId: string | null = null; // Queue whose audio is currently live
 
-  // Listeners now need to be aware of which queue they are for
   private playbackStatusListeners: PlaybackStatusListener[] = [];
   private trackFinishedListeners: TrackFinishedListener[] = [];
 
@@ -38,12 +36,16 @@ class AudioPlaybackService {
 
   private async configureAudioSession() {
     try {
+      // This mode allows multiple sounds to play but respects system interruptions.
+      // The OS will handle mixing.
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         staysActiveInBackground: true,
         playsInSilentModeIOS: true,
-        shouldDuckAndroid: true, // Important if other apps play audio
+        shouldDuckAndroid: false, // Set to false if we want our multiple streams not to duck each other or be ducked as easily
         playThroughEarpieceAndroid: false,
+        // interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS, // Might be useful
+        // interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX, // Default, or Audio.INTERRUPTION_MODE_ANDROID_DUCK_OTHERS
       });
     } catch (e) {
       console.error('Failed to set audio mode', e);
@@ -72,33 +74,44 @@ class AudioPlaybackService {
 
   private notifyTrackFinished(queueId: string) {
     this.trackFinishedListeners.forEach(listener => listener(queueId));
-    this.playNext(queueId); // Auto-play next song on completion by default
+    this.playNext(queueId); // Auto-play next song on completion
   }
 
   public async manageQueue(queueId: string, songs: Song[], initialIndex: number = 0) {
-    if (!this.queueStates.has(queueId)) {
-      this.queueStates.set(queueId, {
+    let state = this.queueStates.get(queueId);
+    if (!state) {
+      state = {
         sound: null,
         songs: [],
         currentIndex: -1,
         isPlaying: false,
-        isActuallyPlayingAudio: false,
         positionMillis: 0,
         durationMillis: 0,
-      });
+        volume: 1.0, // Default to full volume
+      };
+      this.queueStates.set(queueId, state);
     }
-    const state = this.queueStates.get(queueId)!;
+
+    const oldPlayingState = state.isPlaying;
+    const oldCurrentIndex = state.currentIndex;
+
     state.songs = songs;
     state.currentIndex = songs.length > 0 ? Math.max(0, Math.min(initialIndex, songs.length - 1)) : -1;
 
-    // If this queue is supposed to be the active audio output, and it has songs, load it.
-    // Or if it was already playing something, it might need to reload if the song list changed significantly.
-    // For now, let's assume if it's the active audio output, it should try to load/play its current song.
-    if (state.currentIndex >=0 && (state.isPlaying || this.activeAudioOutputQueueId === queueId)) {
-        await this.loadSong(queueId, state.songs[state.currentIndex], state.isPlaying);
-    } else if (state.sound) { // If queue becomes empty or no current index, unload
+    // If the queue was playing, or if the current song changes for a playing queue, reload.
+    // Or if it's a new queue that's supposed to play based on some external logic (not handled here).
+    // For now, if it has a valid song and was playing, or if index changed and was playing, try to reload/resume.
+    if (state.currentIndex >= 0 && oldPlayingState) {
+        // If the song at currentIndex changed or it's a new list, force reload.
+        // For simplicity, always reload if it was playing and songs/index might have changed.
+        await this.loadSong(queueId, state.songs[state.currentIndex], oldPlayingState);
+    } else if (state.currentIndex >= 0 && !oldPlayingState && state.sound && state.songs[state.currentIndex]?.uri !== (await state.sound.getStatusAsync() as AVPlaybackStatusSuccess)?.uri) {
+        // Was paused, but current song changed, ensure it's loaded (paused).
+        await this.loadSong(queueId, state.songs[state.currentIndex], false);
+    } else if (state.currentIndex === -1 && state.sound) { // Queue became empty
         await state.sound.unloadAsync();
         state.sound = null;
+        state.isPlaying = false;
     }
   }
 
@@ -109,46 +122,19 @@ class AudioPlaybackService {
         await state.sound.unloadAsync();
       }
       this.queueStates.delete(queueId);
-      if (this.activeAudioOutputQueueId === queueId) {
-        this.activeAudioOutputQueueId = null; // No queue is actively outputting audio
-      }
     }
   }
 
-  // Sets which queue's audio is actually heard.
-  // Pauses other queues that were set to isPlaying=true but shouldn't output sound.
-  // Resumes the new active queue if it was set to isPlaying=true.
-  public async setActiveAudioOutputQueue(queueId: string | null) {
-    const oldActiveQueueId = this.activeAudioOutputQueueId;
-    this.activeAudioOutputQueueId = queueId;
+  // No longer an `setActiveAudioOutputQueue` that mutes/unmutes.
+  // Each queue plays at its own volume if `isPlaying` is true.
 
-    for (const [id, state] of this.queueStates.entries()) {
-      if (id === queueId) { // This is the new active audio output queue
-        state.isActuallyPlayingAudio = true;
-        if (state.isPlaying && state.sound) { // If it's supposed to be playing, ensure it plays
-          try {
-            const status = await state.sound.getStatusAsync() as AVPlaybackStatusSuccess;
-            if(status.isLoaded && !status.isPlaying) await state.sound.playAsync();
-          } catch (e) { console.error(`Error playing sound for new active queue ${id}`, e); }
-        } else if (state.isPlaying && !state.sound && state.currentIndex !== -1) { // Supposed to be playing but no sound loaded
-            await this.loadSong(id, state.songs[state.currentIndex], true);
-        }
-      } else { // This is not the active audio output queue
-        state.isActuallyPlayingAudio = false;
-        if (state.isPlaying && state.sound) { // If it was playing, pause it (but keep its isPlaying state as true)
-            try {
-                const status = await state.sound.getStatusAsync() as AVPlaybackStatusSuccess;
-                if(status.isLoaded && status.isPlaying) await state.sound.pauseAsync();
-            } catch (e) { console.error(`Error pausing sound for non-active queue ${id}`, e); }
-        }
-      }
-    }
-  }
-
-
-  private async loadSong(queueId: string, song: Song, shouldPlay: boolean) {
+  private async loadSong(queueId: string, song: Song, shouldInitiallyPlay: boolean) {
     const state = this.queueStates.get(queueId);
     if (!state) return;
+
+    // Preserve intended play state from before loading this specific song,
+    // but `shouldInitiallyPlay` can override if it's a fresh play command.
+    state.isPlaying = shouldInitiallyPlay;
 
     try {
       if (state.sound) {
@@ -157,55 +143,63 @@ class AudioPlaybackService {
         state.sound = null;
       }
 
+      // All playing queues are audible at their own volume.
+      // state.volume is the persistent volume for this queue (default 1.0)
+      // isActuallyPlayingAudio is now just state.isPlaying
+
       const { sound, status } = await Audio.Sound.createAsync(
         { uri: song.uri },
-        // Initial shouldPlay is true if this queue is the active audio output AND it's meant to be playing.
-        { shouldPlay: shouldPlay && state.isActuallyPlayingAudio },
+        {
+          shouldPlay: state.isPlaying,
+          volume: state.volume,
+        },
         (playbackStatus) => this.onPlaybackStatusUpdate(queueId, playbackStatus)
       );
       state.sound = sound;
-      // state.isPlaying is the *intended* play state, not necessarily if audio is outputting.
-      // state.isPlaying = shouldPlay; // This is set by play/pause commands mostly.
 
       if ((status as AVPlaybackStatusSuccess).isLoaded) {
         state.durationMillis = (status as AVPlaybackStatusSuccess).durationMillis || 0;
         state.positionMillis = (status as AVPlaybackStatusSuccess).positionMillis || 0;
-        // Update the song object in the queue if duration wasn't known
         if (state.songs[state.currentIndex] && !(state.songs[state.currentIndex].durationMillis)) {
             state.songs[state.currentIndex].durationMillis = state.durationMillis;
         }
         this.notifyPlaybackStatus(queueId, status as AVPlaybackStatusSuccess);
+      } else {
+        // If not loaded, ensure isPlaying is false
+        state.isPlaying = false;
       }
     } catch (e) {
       console.error(`Failed to load song ${song.title} for queue ${queueId}`, e);
-      state.isPlaying = false; // If load fails, it's not playing.
+      state.isPlaying = false;
     }
   }
 
   private onPlaybackStatusUpdate(queueId: string, status: AVPlaybackStatus) {
     const state = this.queueStates.get(queueId);
     if (!state || !status.isLoaded) {
-      if (status.isLoaded === false && status.error) { // Check for isLoaded explicitly false
+      if (status.isLoaded === false && status.error) {
         console.error(`Playback Error for queue ${queueId}: ${status.error}`);
-        if(state) state.isPlaying = false;
+        if(state) state.isPlaying = false; // Reflect error by stopping intended play
       }
+      // Notify even if not loaded, so UI can update (e.g. show loading/error)
+      if(status.isLoaded) this.notifyPlaybackStatus(queueId, status);
       return;
     }
 
     state.positionMillis = status.positionMillis;
-    state.durationMillis = status.durationMillis || state.durationMillis; // Keep old if new is null
+    state.durationMillis = status.durationMillis || state.durationMillis;
 
-    // This reflects the actual state of the Sound object.
-    // state.isPlaying should be set by play/pause commands.
-    // However, if the sound object's isPlaying changes (e.g. due to buffering, or external interruption handled by OS)
-    // we might want to reflect that. For now, we let user commands define state.isPlaying.
-    // What's important is if it *actually* finished.
+    // Update isPlaying based on the actual sound status ONLY if it's different AND
+    // it wasn't a user-initiated pause. E.g. if it stops due to buffering/error.
+    // However, for simplicity, we mainly let user actions (play/pause) define state.isPlaying.
+    // The most important part is didJustFinish.
+    // state.isPlaying = status.isPlaying; // This could override user intent if not careful.
 
     this.notifyPlaybackStatus(queueId, status);
 
     if (status.didJustFinish && !status.isLooping) {
-      state.isPlaying = false; // Mark as not playing since it finished
-      this.notifyTrackFinished(queueId);
+      // state.isPlaying = false; // Song finished, so it's not "playing" this track anymore. Next track will set it.
+      this.notifyTrackFinished(queueId); // This will call playNext, which handles isPlaying for the new track.
     }
   }
 
@@ -213,25 +207,23 @@ class AudioPlaybackService {
     const state = this.queueStates.get(queueId);
     if (!state) return;
 
-    state.isPlaying = true; // Set intended state
+    state.isPlaying = true;
 
-    if (!state.sound && state.currentIndex !== -1) { // Sound not loaded, but there's a song to play
+    if (!state.sound || state.songs[state.currentIndex]?.uri !== (await state.sound.getStatusAsync().catch(() => null) as AVPlaybackStatusSuccess)?.uri) {
+      if (state.currentIndex !== -1 && state.songs[state.currentIndex]) {
         await this.loadSong(queueId, state.songs[state.currentIndex], true);
-    } else if (state.sound) {
-        if (this.activeAudioOutputQueueId === queueId) { // Only play audio if it's the active output queue
-            state.isActuallyPlayingAudio = true;
-            try {
-                await state.sound.playAsync();
-            } catch (e) { console.error('Failed to play sound for queue', queueId, e); }
-        } else {
-            // It's set to play, but not active output. Its sound object remains paused.
-            // It will start playing if setActiveAudioOutputQueue is called for it.
-            state.isActuallyPlayingAudio = false;
-        }
-    }
-     // Ensure other queues are paused if this one is meant to be the active one
-    if (this.activeAudioOutputQueueId === queueId) {
-        await this.setActiveAudioOutputQueue(queueId);
+      } else {
+        state.isPlaying = false; // No valid song to play
+        return;
+      }
+    } else {
+      try {
+        await state.sound.setVolumeAsync(state.volume); // Ensure correct volume
+        await state.sound.playAsync();
+      } catch (e) {
+        console.error('Failed to play sound for queue', queueId, e);
+        state.isPlaying = false; // If play fails
+      }
     }
   }
 
@@ -239,8 +231,7 @@ class AudioPlaybackService {
     const state = this.queueStates.get(queueId);
     if (!state || !state.sound) return;
 
-    state.isPlaying = false; // Set intended state
-    state.isActuallyPlayingAudio = false; // Explicitly not playing audio if paused by user
+    state.isPlaying = false;
     try {
       await state.sound.pauseAsync();
     } catch (e) {
@@ -252,27 +243,22 @@ class AudioPlaybackService {
     const state = this.queueStates.get(queueId);
     if (!state || state.songs.length === 0) return;
 
-    if (state.currentIndex < state.songs.length - 1) {
-      state.currentIndex++;
-    } else {
-      state.currentIndex = 0; // Loop to the beginning, or implement end-of-queue behavior
-      // For now, simple loop. If you don't want looping, set currentIndex to -1 or stop.
-      // state.isPlaying = false; // Stop if not looping.
-    }
-    // Load the new song. If the queue was playing, it should continue playing the new song.
-    await this.loadSong(queueId, state.songs[state.currentIndex], state.isPlaying);
+    const wasPlaying = state.isPlaying;
+    state.currentIndex = (state.currentIndex + 1) % state.songs.length; // Simple loop
+
+    // if (!wasPlaying && state.currentIndex === 0 && !LOOP_QUEUE_OPTION) { state.isPlaying = false } // Example: stop if not looping and was not playing
+
+    await this.loadSong(queueId, state.songs[state.currentIndex], wasPlaying);
   }
 
   public async playPrevious(queueId: string) {
     const state = this.queueStates.get(queueId);
     if (!state || state.songs.length === 0) return;
 
-    if (state.currentIndex > 0) {
-      state.currentIndex--;
-    } else {
-      state.currentIndex = state.songs.length - 1; // Loop to the end
-    }
-    await this.loadSong(queueId, state.songs[state.currentIndex], state.isPlaying);
+    const wasPlaying = state.isPlaying;
+    state.currentIndex = (state.currentIndex - 1 + state.songs.length) % state.songs.length; // Simple loop back
+
+    await this.loadSong(queueId, state.songs[state.currentIndex], wasPlaying);
   }
 
   public async seek(queueId: string, positionMillis: number) {
@@ -280,23 +266,37 @@ class AudioPlaybackService {
     if (!state || !state.sound) return;
     try {
       await state.sound.setPositionAsync(positionMillis);
-      state.positionMillis = positionMillis; // Optimistically update
+      state.positionMillis = positionMillis;
     } catch (e) {
       console.error('Failed to seek for queue', queueId, e);
     }
   }
 
+  // Optional: Method to set volume for a specific queue
+  public async setQueueVolume(queueId: string, volume: number) {
+    const state = this.queueStates.get(queueId);
+    if (!state) return;
+    state.volume = Math.max(0, Math.min(1, volume)); // Clamp between 0 and 1
+    if (state.sound) {
+      try {
+        await state.sound.setVolumeAsync(state.volume);
+      } catch (e) {
+        console.error(`Failed to set volume for queue ${queueId}`, e);
+      }
+    }
+  }
+
   public getQueuePlaybackState(queueId: string): Partial<QueuePlaybackState> {
     const state = this.queueStates.get(queueId);
-    if (!state) return { currentIndex: -1, isPlaying: false, songs: [] };
+    if (!state) return { currentIndex: -1, isPlaying: false, songs: [], volume: 1.0 };
     return {
       songs: state.songs,
       currentIndex: state.currentIndex,
-      isPlaying: state.isPlaying, // Intended play state
-      isActuallyPlayingAudio: state.isActuallyPlayingAudio, // If audio is outputting
+      isPlaying: state.isPlaying,
       positionMillis: state.positionMillis,
       durationMillis: state.durationMillis,
-      sound: state.sound, // Exposing sound might be risky, but useful for context to get detailed status
+      volume: state.volume,
+      // sound: state.sound, // Avoid exposing sound object directly if possible
     };
   }
 
@@ -308,7 +308,6 @@ class AudioPlaybackService {
     return null;
   }
 
-  // Cleanup all resources
   public async cleanup() {
     for (const queueId of this.queueStates.keys()) {
       await this.removeQueue(queueId);
@@ -318,6 +317,5 @@ class AudioPlaybackService {
   }
 }
 
-// Singleton instance
 const audioPlaybackService = new AudioPlaybackService();
 export { audioPlaybackService };

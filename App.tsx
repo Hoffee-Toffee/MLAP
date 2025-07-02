@@ -15,10 +15,11 @@ const PlaylistsScreen = () => <View style={{ flex: 1, justifyContent: 'center', 
 // const NowPlayingScreen = () => <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Now Playing Screen</Text></View>;
 
 // Import Text and View from react-native
-import { Text, View } from 'react-native';
+import { Text } from 'react-native'; // View is already imported below
 import NowPlayingScreen from './screens/NowPlayingScreen'; // Import the actual screen
 import SongsScreen from './screens/SongsScreen'; // Import the actual SongsScreen
 import { AllQueuesProvider } from './contexts/AllQueuesContext'; // Import AllQueuesProvider
+import { SafeAreaView } from 'react-native-safe-area-context'; // Import SafeAreaView
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -29,8 +30,9 @@ import { View } from 'react-native'; // Import View
 
 function MainTabs() {
   return (
-    // Layout: QueueSwitcher, then Tabs, then PlayerBar at the bottom
-    <View style={{ flex: 1 }}>
+    // Use SafeAreaView to handle notches and system UI overlaps
+    // Apply flex: 1 to make it fill the available space given by NavigationContainer
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f0f0f0' /* Optional: background for safe area */ }}>
       <QueueSwitcher />
       <Tab.Navigator
         screenOptions={({ route }) => ({
@@ -67,7 +69,7 @@ function MainTabs() {
         <Tab.Screen name="Playlists" component={PlaylistsScreen} />
       </Tab.Navigator>
       <PlayerBar />
-    </View>
+    </SafeAreaView>
   );
 }
 
