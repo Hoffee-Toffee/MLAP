@@ -29,10 +29,9 @@ import { View } from 'react-native'; // Import View
 
 function MainTabs() {
   return (
-    // Use a View to encompass QueueSwitcher, PlayerBar, and Tab.Navigator
+    // Layout: QueueSwitcher, then Tabs, then PlayerBar at the bottom
     <View style={{ flex: 1 }}>
       <QueueSwitcher />
-      <PlayerBar />
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -46,19 +45,28 @@ function MainTabs() {
             } else if (route.name === 'Playlists') {
               iconName = focused ? 'list' : 'list-outline';
             }
-            return <Ionicons name={iconName as any} size={size} color={color} />;
+            // Ensure iconName is a valid Ionicons name or handle undefined case
+            return <Ionicons name={iconName as keyof typeof Ionicons.glyphMap} size={size} color={color} />;
           },
           tabBarActiveTintColor: 'tomato',
           tabBarInactiveTintColor: 'gray',
-          headerShown: false, // Hide header for tab screens if TopBar is part of each screen or handled by Stack
+          headerShown: false,
+          // tabBarPosition: 'top', // This is for createMaterialTopTabNavigator, not BottomTabNavigator
         })}
+        // For BottomTabNavigator, tabs are always at the bottom.
+        // To have tabs at the top, you'd typically use createMaterialTopTabNavigator
+        // or style a custom tab bar component.
+        // Given the constraint, we'll keep BottomTabNavigator and PlayerBar will be below it.
+        // The visual effect will be: QueueSwitcher -> Content Area (Tabs manage this) -> PlayerBar.
+        // If tabs *must* be visually at the top, below switcher, then createMaterialTopTabNavigator is the way.
+        // Let's assume the request meant "PlayerBar at the very bottom, Tabs are part of the main content area above it".
       >
         <Tab.Screen name="Songs" component={SongsScreen} />
         <Tab.Screen name="Albums" component={AlbumsScreen} />
         <Tab.Screen name="Artists" component={ArtistsScreen} />
         <Tab.Screen name="Playlists" component={PlaylistsScreen} />
       </Tab.Navigator>
-      {/* PlayerBar is moved up */}
+      <PlayerBar />
     </View>
   );
 }
@@ -74,7 +82,6 @@ const AppStack = () => (
     <Stack.Screen
       name="NowPlaying"
       component={NowPlayingScreen}
-      // Options for NowPlayingScreen can be customized here, e.g. presentation modal
       options={{ title: 'Now Playing', presentation: 'modal' }}
     />
   </Stack.Navigator>

@@ -13,8 +13,8 @@ const SongsScreen: React.FC = () => {
   const [mediaLibrarySongs, setMediaLibrarySongs] = useState<Song[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
-  const { activeQueueId, addSongsToQueue, queues } = useAllQueues();
-  const audioPlayer = useAudioPlayer(); // To access loadAndPlayQueue for the active queue
+  const { activeQueueId, addSongsToQueue, queues, getQueueById } = useAllQueues(); // Added getQueueById
+  // audioPlayer is not directly needed here anymore for playing, as SongList's default behavior handles it for the active queue context.
 
   const fetchMediaLibrarySongs = async () => {
     if (!permissionResponse) {
@@ -149,38 +149,23 @@ const SongsScreen: React.FC = () => {
     );
   }
 
-  // Determine the songs for the active queue to display them if needed, or a message.
-  const currentActiveQueue = queues.find(q => q.id === activeQueueId);
+  const currentActiveQueueDetails = getQueueById(activeQueueId);
+  const activeQueueName = currentActiveQueueDetails?.name || "active queue";
 
   return (
     <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
-            {/* Section to display songs from MediaLibrary */}
-            <Text style={styles.sectionTitle}>Available Songs (Tap to add to '{currentActiveQueue?.name || "active queue"}')</Text>
-            <View style={styles.mediaLibraryListContainer}>
-              <SongList
-                songs={mediaLibrarySongs}
-                onSongPress={(song) => handleSongPressInMediaLibrary(song)}
-                emptyMessage="No songs found in your media library."
-              />
-            </View>
-
-            {/* Section to display songs in the current active queue */}
-            {currentActiveQueue && (
-              <>
-                <Text style={styles.sectionTitle}>Songs in '{currentActiveQueue.name}'</Text>
-                <View style={styles.activeQueueListContainer}>
-                  <SongList
-                    songs={currentActiveQueue.songs}
-                    // Default onSongPress for active queue songs will play them from this queue
-                    emptyMessage="This queue is empty. Add songs from above."
-                  />
-                </View>
-              </>
-            )}
+            <Text style={styles.sectionTitle}>
+                All Songs (Tap to add to '{activeQueueName}')
+            </Text>
+            <SongList
+              songs={mediaLibrarySongs}
+              onSongPress={(song) => handleSongPressInMediaLibrary(song)}
+              emptyMessage="No songs found in your media library. Ensure permissions are granted."
+            />
             {!activeQueueId && !isLoading && (
-                <View style={styles.centered}>
-                    <Text>No active queue selected. Select or create one using the switcher above.</Text>
+                 <View style={styles.centeredWarning}>
+                    <Text style={styles.warningText}>No active queue. Select or create one to add songs.</Text>
                 </View>
             )}
         </View>
@@ -196,31 +181,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  centeredWarning: { // For the "No active queue" message
     padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fffbe6', // Light yellow background for warning
+    borderTopWidth: 1,
+    borderTopColor: '#ffe58f',
+  },
+  warningText: {
+    textAlign: 'center',
+    color: '#8a6d3b', // Dark yellow text
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16, // Slightly smaller
     fontWeight: 'bold',
     paddingHorizontal: 15,
-    paddingTop: 15,
-    paddingBottom: 5,
-    backgroundColor: '#f0f0f0', // Light background for section titles
-    color: '#333',
+    paddingVertical: 10, // Adjusted padding
+    backgroundColor: '#f7f7f7',
+    color: '#444',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  mediaLibraryListContainer: {
-    flex: 1, // Adjust flex proportions as needed
-    // maxHeight: '50%', // Example: limit height if both lists are always visible
-  },
-  activeQueueListContainer: {
-    flex: 1, // Adjust flex proportions as needed
-    // maxHeight: '50%',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  }
+  // mediaLibraryListContainer and activeQueueListContainer are no longer needed
+  // as SongList will take the available space in the main container.
 });
 
 export default SongsScreen;

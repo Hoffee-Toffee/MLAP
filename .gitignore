@@ -1,37 +1,117 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
+yarn.lock
+package-lock.json
 
 # Expo
 .expo/
+.expo-shared/
 dist/
 web-build/
 expo-env.d.ts
+app.config.ts # If it contains secrets, otherwise can be versioned
+app.json # If it contains secrets, otherwise can be versioned
 
 # Native
+android/
+ios/
 .kotlin/
 *.orig.*
+
+# Keystores and provisioning
 *.jks
 *.p8
 *.p12
 *.key
+*.keystore
 *.mobileprovision
+*.provisionprofile
 
-# Metro
+# Metro Bundler
 .metro-health-check*
+.metro/
 
-# debug
+# Debugging
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+logs/
 
 # macOS
 .DS_Store
-*.pem
+.AppleDouble
+.LSOverride
+Thumbs.db
 
-# local env files
-.env*.local
+# IDE files
+.idea/
+.vscode/
+*.project
+*.classpath
+*.cpc
+*.launch
+*.suo
+*.sublime-project
+*.sublime-workspace
+*.tmproj
+*.tmproject
+*.swp
+*.swo
+nbproject/
 
-# typescript
+# Build artifacts
+/build/
+/dist/ # Already present, but good to ensure
+/web-build/ # Already present
+/coverage/
+.nyc_output/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+# (It's good practice to commit a .env.example with placeholder values)
+
+# TypeScript
 *.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Yarn PnP (if used)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# EAS Build specific (if using EAS)
+eas-build-pre-upload.tar.gz
+*.apk
+*.aab
+*.ipa
+*.tar.gz # General tarballs if they are build outputs
+
+# Firebase (if used)
+google-services.json # Typically downloaded, not versioned if project specific
+GoogleService-Info.plist # Same as above
+
+# Temporary files
+*.tmp
+*~
+~$*
+
+# Windows specific
+Desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+
+# Other
+*.orig
+*.bak
+*.seed
+local.properties # Android specific local properties
+```

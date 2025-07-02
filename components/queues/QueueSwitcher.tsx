@@ -86,38 +86,50 @@ const QueueSwitcher: React.FC = () => {
     value: queue.id,
   }));
 
+  // State to manage if the picker is open - RNPickerSelect doesn't expose this directly easily.
+  // We'll simulate this by having a separate "Add" button that's more prominent,
+  // or by adding "Add New Queue..." as an item in the picker itself if the library supports it well.
+  // For now, let's adjust the button layout slightly. The requirement "Options for adding a queue should appear when the dropdown menu is open"
+  // is hard to achieve with RNPickerSelect directly. A custom dropdown would be needed.
+  // Alternative: Have a general "Manage Queues" button that opens a modal with all options including "Add".
+  // Let's try adding "Add New..." to the picker list and handling it.
+
+  const itemsWithAdd = [
+    ...pickerItems,
+    { label: '+ Add New Queue...', value: 'ADD_NEW_QUEUE_ACTION', color: '#007AFF' } // Special value
+  ];
+
+
   return (
     <View style={styles.container}>
       <View style={styles.pickerContainer}>
         <RNPickerSelect
           onValueChange={(value) => {
-            if (value) setActiveQueueId(value);
+            if (value === 'ADD_NEW_QUEUE_ACTION') {
+              openModal('add');
+            } else if (value) {
+              setActiveQueueId(value);
+            }
           }}
-          items={pickerItems}
+          items={itemsWithAdd} // Use items with the "Add" option
           value={activeQueueId}
-          placeholder={{ label: 'Select a queue...', value: null }}
+          placeholder={{ label: 'Select or manage queues...', value: null }}
           style={pickerSelectStyles}
-          useNativeAndroidPickerStyle={false} // Important for custom styling on Android
-          Icon={() => {
-            return <Ionicons name="chevron-down" size={20} color="gray" style={styles.pickerIcon} />;
-          }}
+          useNativeAndroidPickerStyle={false}
+          Icon={() => <Ionicons name="chevron-down" size={20} color="gray" style={styles.pickerIcon} />}
         />
       </View>
-      <View style={styles.buttonsContainer}>
-        <TouchableOpacity onPress={() => openModal('add')} style={styles.iconButton}>
-          <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
-        </TouchableOpacity>
-        {activeQueueId && (
-          <>
+      {/* Keep dedicated buttons for rename/delete for the active queue for clarity, if an active queue is selected */}
+      {activeQueueId && (
+        <View style={styles.buttonsContainer}>
             <TouchableOpacity onPress={() => openModal('rename', activeQueueId)} style={styles.iconButton}>
-              <Ionicons name="create-outline" size={28} color="#FF9500" />
+              <Ionicons name="create-outline" size={26} color="#FF9500" />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleDeleteQueue} style={styles.iconButton}>
-              <Ionicons name="trash-outline" size={28} color="#FF3B30" />
+              <Ionicons name="trash-outline" size={26} color="#FF3B30" />
             </TouchableOpacity>
-          </>
-        )}
-      </View>
+        </View>
+      )}
 
       <Modal
         animationType="slide"

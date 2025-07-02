@@ -100,16 +100,16 @@ const PlayerBar: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    // position: 'absolute', // No longer absolute positioning
-    // bottom: 0,
+    // position: 'absolute', // Not needed if it's part of flex layout
+    // bottom: 0, // Removed as it's at the bottom of its parent View now
     left: 0,
     right: 0,
     backgroundColor: '#2c3e50',
-    paddingVertical: 5,
-    // borderTopWidth: 1, // Becomes borderBottomWidth if it's under something like QueueSwitcher
-    // borderTopColor: '#34495e',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a252f', // Darker border for separation
+    paddingVertical: 8, // Slightly more padding for touchability
+    borderTopWidth: 1, // Standard top border as it's at the bottom of the screen overall
+    borderTopColor: '#34495e', // Consistent with original bottom bar styling
+    // borderBottomWidth: 1, // Removed, was for when it was at the top
+    // borderBottomColor: '#1a252f',
   },
   content: {
     flexDirection: 'row',
