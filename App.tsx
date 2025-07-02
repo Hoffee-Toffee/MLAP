@@ -18,15 +18,21 @@ const PlaylistsScreen = () => <View style={{ flex: 1, justifyContent: 'center', 
 import { Text, View } from 'react-native';
 import NowPlayingScreen from './screens/NowPlayingScreen'; // Import the actual screen
 import SongsScreen from './screens/SongsScreen'; // Import the actual SongsScreen
+import { AllQueuesProvider } from './contexts/AllQueuesContext'; // Import AllQueuesProvider
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 import PlayerBar from './components/player/PlayerBar'; // Import PlayerBar
+import QueueSwitcher from './components/queues/QueueSwitcher'; // Import QueueSwitcher
+import { View } from 'react-native'; // Import View
 
 function MainTabs() {
   return (
-    <>
+    // Use a View to encompass QueueSwitcher, PlayerBar, and Tab.Navigator
+    <View style={{ flex: 1 }}>
+      <QueueSwitcher />
+      <PlayerBar />
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -52,8 +58,8 @@ function MainTabs() {
         <Tab.Screen name="Artists" component={ArtistsScreen} />
         <Tab.Screen name="Playlists" component={PlaylistsScreen} />
       </Tab.Navigator>
-      <PlayerBar />
-    </>
+      {/* PlayerBar is moved up */}
+    </View>
   );
 }
 
@@ -77,11 +83,13 @@ const AppStack = () => (
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AudioPlayerProvider>
-        <NavigationContainer>
-          <AppStack />
-        </NavigationContainer>
-      </AudioPlayerProvider>
+      <AllQueuesProvider>
+        <AudioPlayerProvider>
+          <NavigationContainer>
+            <AppStack />
+          </NavigationContainer>
+        </AudioPlayerProvider>
+      </AllQueuesProvider>
     </SafeAreaProvider>
   );
 }

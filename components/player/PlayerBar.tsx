@@ -32,14 +32,28 @@ const PlayerBar: React.FC = () => {
     play,
     pause,
     playNext,
+    queue, // Get the current queue
   } = useAudioPlayer();
   const navigation = useNavigation<PlayerBarNavigationProp>();
 
-  if (!currentSong) {
-    return null; // Don't render if no song is loaded/playing
+  // Only render PlayerBar if there's a song in the current queue context,
+  // not necessarily if a song is *loaded* in the service, to allow it to show even if paused/stopped.
+  // Or, always show if you prefer, and currentSong from service will be null if nothing is loaded.
+  // For this change, let's make it visible if there's an active queue with songs, or a current song.
+  const activeQueueHasSongs = queue && queue.length > 0;
+
+  if (!currentSong && !activeQueueHasSongs) {
+     // If no song is loaded into the player service AND the active queue is empty, don't render.
+     // This means if you switch to an empty queue, the player bar disappears.
+     // If you want it to persist and show "Nothing playing" for an empty active queue,
+     // then remove `&& !activeQueueHasSongs` and adjust the UI below for when `currentSong` is null.
+    return null;
   }
 
+  const displaySong = currentSong; // Use the song loaded in the player service for display
+
   const onPlayPausePress = () => {
+    if (!displaySong) return; // Cannot play/pause if no song is loaded
     if (isPlaying) {
       pause();
     } else {
@@ -48,32 +62,35 @@ const PlayerBar: React.FC = () => {
   };
 
   // Calculate progress for the Slider component
-  const progress = playbackDurationMillis > 0 ? playbackPositionMillis / playbackDurationMillis : 0;
+  const progress = displaySong && playbackDurationMillis > 0 ? playbackPositionMillis / playbackDurationMillis : 0;
 
   return (
-    <TouchableOpacity style={styles.container} onPress={() => navigation.navigate('NowPlaying')}>
+    <TouchableOpacity
+        style={styles.container}
+        onPress={() => displaySong ? navigation.navigate('NowPlaying') : {}}
+        disabled={!displaySong} // Disable press if no song is loaded
+    >
       <View style={styles.content}>
-        {currentSong.albumArtUri ? (
-          <Image source={{ uri: currentSong.albumArtUri }} style={styles.albumArt} />
+        {displaySong?.albumArtUri ? (
+          <Image source={{ uri: displaySong.albumArtUri }} style={styles.albumArt} />
         ) : (
           <View style={styles.placeholderAlbumArt}>
             <Ionicons name="musical-note" size={20} color="#fff" />
           </View>
         )}
         <View style={styles.infoContainer}>
-          <Text style={styles.title} numberOfLines={1}>{currentSong.title}</Text>
-          <Text style={styles.artist} numberOfLines={1}>{currentSong.artist || 'Unknown Artist'}</Text>
+          <Text style={styles.title} numberOfLines={1}>{displaySong?.title || (activeQueueHasSongs ? "Tap a song to play" : "No songs in queue")}</Text>
+          <Text style={styles.artist} numberOfLines={1}>{displaySong?.artist || ''}</Text>
         </View>
         <View style={styles.controls}>
-          <TouchableOpacity onPress={onPlayPausePress} style={styles.controlButton}>
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#fff" />
+          <TouchableOpacity onPress={onPlayPausePress} style={styles.controlButton} disabled={!displaySong}>
+            <Ionicons name={isPlaying && displaySong ? 'pause' : 'play'} size={28} color={displaySong ? "#fff" : "#888"} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={playNext} style={styles.controlButton}>
-            <Ionicons name="play-skip-forward" size={24} color="#fff" />
+          <TouchableOpacity onPress={playNext} style={styles.controlButton} disabled={!displaySong}>
+            <Ionicons name="play-skip-forward" size={24} color={displaySong ? "#fff" : "#888"} />
           </TouchableOpacity>
         </View>
       </View>
-       {/* Thin progress bar at the bottom */}
       <View style={styles.progressBarContainer}>
         <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
       </View>
@@ -83,14 +100,16 @@ const PlayerBar: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 0, // Adjust if you have a tab bar, might need to be dynamic
+    // position: 'absolute', // No longer absolute positioning
+    // bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#2c3e50', // Darker theme color
-    paddingVertical: 5, // Reduced padding
-    borderTopWidth: 1,
-    borderTopColor: '#34495e',
+    backgroundColor: '#2c3e50',
+    paddingVertical: 5,
+    // borderTopWidth: 1, // Becomes borderBottomWidth if it's under something like QueueSwitcher
+    // borderTopColor: '#34495e',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a252f', // Darker border for separation
   },
   content: {
     flexDirection: 'row',
